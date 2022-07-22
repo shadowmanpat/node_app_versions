@@ -1,9 +1,12 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/http.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'dart:html';
 
 void main() {
   runApp(const MyApp());
@@ -71,13 +74,29 @@ class _MyHomePageState extends State<MyHomePage> {
    setState(() {});
   }
   Future<AppViewItem> fetchAppInfo(ViewType type) async {
+    var baseUrl = "";
+    var apiUrl = "";
+    var origin = window.location.origin;
+    if(kIsWeb){
+      var origin = window.location.origin;
+//      Uri(url)
+      print("origin $origin");
+      baseUrl = origin;
+      if(origin.contains("localhost") ){
+        baseUrl = origin;
+      }else {
+        baseUrl =  "http://localhost:3000";
+      }
+
+      apiUrl = baseUrl + "/api";
+    }
     Response response;
     if (type == ViewType.android){
       response = await http
-          .get(Uri.parse('http://localhost:6060/api/android'));
+          .get(Uri.parse('$origin/api/android'));
     }else {
       response = await http
-          .get(Uri.parse('http://localhost:6060/api/ios'));
+          .get(Uri.parse('$origin/api/ios'));
     }
 
     if (response.statusCode == 200) {
@@ -90,10 +109,10 @@ class _MyHomePageState extends State<MyHomePage> {
 
 // 12 Hour format:
         var d12 = DateFormat('MM/dd/yyyy, hh:mm a').format(dt); // 12/31/2000, 10:00 PM
-        AppViewItem appViewItem = AppViewItem(bundleId: result["appId"], title: result["title"], url: result["url"], type: type, updated:d12);
+        AppViewItem appViewItem = AppViewItem(bundleId: result["appId"], title: result["title"], url: result["url"], type: type, updated:d12, icon: result["icon"],version: result["version"]);
         return appViewItem;
       }else {
-        AppViewItem appViewItem = AppViewItem(bundleId: result["appId"], title: result["title"], url: result["url"], type: type, updated:  result["updated"]);
+        AppViewItem appViewItem = AppViewItem(bundleId: result["appId"], title: result["title"], url: result["url"], type: type, updated:  result["updated"],icon: result["icon"], version: result["version"]);
         return appViewItem;
       }
       // return Album.fromJson(jsonDecode(response.body));
@@ -183,14 +202,53 @@ class _MyHomePageState extends State<MyHomePage> {
         mainAxisAlignment: MainAxisAlignment.start,
         mainAxisSize: MainAxisSize.max,
         children: [
-          Text(item.type == ViewType.android ? "Android": "iOS"),
-          Text(item.bundleId),
-          Text(item.title),
-          Text(item.url),
-          Text(item.updated),
+          Image.network(item.type == ViewType.android ?
+          'https://www.nickagas.com/wp-content/uploads/android-1024x512.png' : "https://www.nickagas.com/wp-content/uploads/download-on-the-app-store-icon-logo-300x163.png",
+          width: 300,
+          height: 300,),
+          Text(item.title, style: TextStyle(
+              fontSize: 25,
+              fontWeight: FontWeight.bold
+          ),),
+          SizedBox(height: 8,),
+          //https://www.nickagas.com/wp-content/uploads/android-1024x512.png
+          Text(item.type == ViewType.android ? "Android - ${item.version}": "iOS - ${item.version}", style: TextStyle(
+            fontSize: 25,
+            fontWeight: FontWeight.bold
+          ),),
+          SizedBox(height: 8,),
+          Text("Updated - ${item.updated}", style: TextStyle(
+              fontSize: 25,
+              fontWeight: FontWeight.bold
+          ),),
+          SizedBox(height: 8,),
+          Image.network(
+          item.icon ,
+            width: 100,
+            height: 100,),
+
+          SizedBox(height: 8,),
+          Text(item.bundleId, style: TextStyle(
+              fontSize: 25,
+              fontWeight: FontWeight.bold
+          ),),
+          SizedBox(height: 8,),
+
+          Text(item.url, ),
+          SizedBox(height: 8,),
+          ElevatedButton(
+            onPressed: () => _launchUrl(item.url),
+            child: Text(item.type == ViewType.android ?'Open Play Store' : "Open App Store "),
+          ),
         ],
       ),
     );
+  }
+  Future<void> _launchUrl(String url) async {
+    var uri = Uri.parse(url);
+    if (!await launchUrl(uri)) {
+      throw 'Could not launch $url';
+    }
   }
 }
 class AppViewItem{
@@ -198,8 +256,10 @@ class AppViewItem{
   String bundleId;
   String title;
   String url;
+  String icon;
   String updated;
+  String version;
   // List<String> screenshots;
-  AppViewItem({required this.type, required this.bundleId,required this.title, required this.url, required this.updated}){
+  AppViewItem({required this.version, required this.type, required this.bundleId,required this.title, required this.url, required this.updated, required this.icon}){
   }
 }
