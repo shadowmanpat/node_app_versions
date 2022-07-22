@@ -1,4 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/http.dart';
+import 'package:intl/intl.dart';
 
 void main() {
   runApp(const MyApp());
@@ -11,6 +16,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       title: 'Flutter Demo',
       theme: ThemeData(
         // This is the theme of your application.
@@ -24,7 +30,7 @@ class MyApp extends StatelessWidget {
         // is not restarted.
         primarySwatch: Colors.blue,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const MyHomePage(title: 'MJN Crew Store Status'),
     );
   }
 }
@@ -47,20 +53,80 @@ class MyHomePage extends StatefulWidget {
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
+enum ViewType {android, ios}
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+  AppViewItem? androidAppViewItem;
+  AppViewItem? iosAppViewItem;
+  @override
+  void initState() {
+    super.initState();
+    getAppVersions();
   }
 
+  getAppVersions() async{
+   androidAppViewItem = await fetchAppInfo(ViewType.android);
+   setState(() {});
+   iosAppViewItem = await fetchAppInfo(ViewType.ios);
+   setState(() {});
+  }
+  Future<AppViewItem> fetchAppInfo(ViewType type) async {
+    Response response;
+    if (type == ViewType.android){
+      response = await http
+          .get(Uri.parse('http://localhost:6060/api/android'));
+    }else {
+      response = await http
+          .get(Uri.parse('http://localhost:6060/api/ios'));
+    }
+
+    if (response.statusCode == 200) {
+      // If the server did return a 200 OK response,
+      // then parse the JSON.
+      var result = jsonDecode(response.body)["result"];
+      if (type == ViewType.android){
+        var millis =  result["updated"];
+        var dt = DateTime.fromMillisecondsSinceEpoch(millis);
+
+// 12 Hour format:
+        var d12 = DateFormat('MM/dd/yyyy, hh:mm a').format(dt); // 12/31/2000, 10:00 PM
+        AppViewItem appViewItem = AppViewItem(bundleId: result["appId"], title: result["title"], url: result["url"], type: type, updated:d12);
+        return appViewItem;
+      }else {
+        AppViewItem appViewItem = AppViewItem(bundleId: result["appId"], title: result["title"], url: result["url"], type: type, updated:  result["updated"]);
+        return appViewItem;
+      }
+      // return Album.fromJson(jsonDecode(response.body));
+    } else {
+      // If the server did not return a 200 OK response,
+      // then throw an exception.
+      throw Exception('Failed to load album');
+    }
+  }
+  getCustomFormattedDateTime(String givenDateTime, String dateFormat) {
+    // dateFormat = 'MM/dd/yy';
+    final DateTime docDateTime = DateTime.parse(givenDateTime);
+    return DateFormat(dateFormat).format(docDateTime);
+  }
+  String readTimestamp(int timestamp) {
+    var now = new DateTime.now();
+    var format = new DateFormat('HH:mm a');
+    var date = new DateTime.fromMicrosecondsSinceEpoch(timestamp * 1000);
+    var diff = date.difference(now);
+    var time = '';
+
+    if (diff.inSeconds <= 0 || diff.inSeconds > 0 && diff.inMinutes == 0 || diff.inMinutes > 0 && diff.inHours == 0 || diff.inHours > 0 && diff.inDays == 0) {
+      time = format.format(date);
+    } else {
+      if (diff.inDays == 1) {
+        time = diff.inDays.toString() + 'DAY AGO';
+      } else {
+        time = diff.inDays.toString() + 'DAYS AGO';
+      }
+    }
+
+    return time;
+  }
   @override
   Widget build(BuildContext context) {
     // This method is rerun every time setState is called, for instance as done
@@ -78,7 +144,7 @@ class _MyHomePageState extends State<MyHomePage> {
       body: Center(
         // Center is a layout widget. It takes a single child and positions it
         // in the middle of the parent.
-        child: Column(
+        child: Row(
           // Column is also a layout widget. It takes a list of children and
           // arranges them vertically. By default, it sizes itself to fit its
           // children horizontally, and tries to be as tall as its parent.
@@ -93,23 +159,47 @@ class _MyHomePageState extends State<MyHomePage> {
           // center the children vertically; the main axis here is the vertical
           // axis because Columns are vertical (the cross axis would be
           // horizontal).
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text(
-              'You have pushed the button this many times:',
-            ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headline4,
-            ),
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          mainAxisSize: MainAxisSize.max,
+          children: [
+            getAppViewWidget(androidAppViewItem),
+            getAppViewWidget(iosAppViewItem)
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
       ), // This trailing comma makes auto-formatting nicer for build methods.
     );
+  }
+
+
+  Widget getAppViewWidget(AppViewItem? item){
+
+    if (item == null){
+      return Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.start,
+        mainAxisSize: MainAxisSize.max,
+        children: [
+          Text(item.type == ViewType.android ? "Android": "iOS"),
+          Text(item.bundleId),
+          Text(item.title),
+          Text(item.url),
+          Text(item.updated),
+        ],
+      ),
+    );
+  }
+}
+class AppViewItem{
+  ViewType type;
+  String bundleId;
+  String title;
+  String url;
+  String updated;
+  // List<String> screenshots;
+  AppViewItem({required this.type, required this.bundleId,required this.title, required this.url, required this.updated}){
   }
 }
