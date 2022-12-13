@@ -7,6 +7,7 @@ import apiRoutes from "./routes/apiRoutes";
 
 const router: Express = express();
 
+
 /** Logging */
 router.use(morgan("dev"));
 /** Parse the request */
